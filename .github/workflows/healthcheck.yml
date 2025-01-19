@@ -13,10 +13,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Healthcheck for domains (HTTP on port 80 only)
+      - name: Healthcheck for domains & Send
         id: healthcheck
         env:
           TARGETS: ${{ secrets.HEALTHCHECK_TARGETS }} # ex) example.com,test.com,...
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           # 대상 도메인 리스트 분리
           IFS=',' read -r -a targets <<< "$TARGETS"
@@ -34,11 +35,7 @@ jobs:
               echo "$domain - SUCCESS" >> healthcheck_results.txt
             fi
           done
-
-      - name: Send Notification to Discord
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: |
+          
           failed_checks=$(grep "FAIL" healthcheck_results.txt)
 
           if [ -n "$failed_checks" ]; then
