@@ -1,0 +1,44 @@
+name: Notification Workflow
+
+on:
+  workflow_run:
+    workflows: ["Healthcheck Workflow"]
+    types:
+      - completed
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Encrypted Healthcheck Results
+        uses: actions/download-artifact@v3
+        with:
+          name: healthcheck-results-encrypted
+          path: ./healthcheck_results.txt.enc
+
+      - name: Decrypt Results with Symmetric Key
+        env:
+          SYMMETRIC_KEY: ${{ secrets.SYMMETRIC_KEY }}
+        run: |
+          echo "Decrypting results with symmetric key..."
+          openssl enc -aes-256-cbc -d -pbkdf2 -iter 100000 \
+            -in healthcheck_results.txt.enc \
+            -out healthcheck_results.txt \
+            -pass pass:"$SYMMETRIC_KEY"
+
+      - name: Send Notification to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          failed_checks=$(grep "FAIL" healthcheck_results.txt)
+
+          if [ -n "$failed_checks" ]; then
+            message="⚠️ Healthcheck failed for the following targets:\n"
+            message+="$failed_checks"
+
+            curl -H "Content-Type: application/json" \
+                 -d "{\"content\": \"$message\"}" \
+                 $DISCORD_WEBHOOK
+          else
+            echo "No failed checks. No notification sent."

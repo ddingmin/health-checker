@@ -1,0 +1,52 @@
+name: Healthcheck Workflow
+
+on:
+  schedule:
+    - cron: '0 * * * *' # 매 1시간마다 실행
+  workflow_dispatch: # 수동 트리거
+
+jobs:
+  healthcheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Healthcheck for domains (HTTP on port 80 only)
+        id: healthcheck
+        env:
+          TARGETS: ${{ secrets.HEALTHCHECK_TARGETS }} # ex) example.com,test.com,...
+        run: |
+          # 대상 도메인 리스트 분리
+          IFS=',' read -r -a targets <<< "$TARGETS"
+          
+          # 결과 파일 초기화
+          echo "" > healthcheck_results.txt
+
+          for domain in "${targets[@]}"; do
+            echo "Checking $domain on port 80"
+            http_status=$(curl -o /dev/null -s -w "%{http_code}" $domain)
+          
+            if [[ "$http_status" =~ ^4|5 ]]; then
+              echo "$domain - FAIL (HTTP $http_status)" >> healthcheck_results.txt
+            else
+              echo "$domain - SUCCESS" >> healthcheck_results.txt
+            fi
+          done
+
+      - name: Encrypt Results with Symmetric Key
+        env:
+          SYMMETRIC_KEY: ${{ secrets.SYMMETRIC_KEY }}
+        run: |
+          echo "Encrypting results with symmetric key..."
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+            -in healthcheck_results.txt \
+            -out healthcheck_results.txt.enc \
+            -pass pass:"$SYMMETRIC_KEY"
+
+      - name: Upload Encrypted Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: healthcheck-results-encrypted
+          path: healthcheck_results.txt.enc
