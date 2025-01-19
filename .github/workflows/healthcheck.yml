@@ -35,18 +35,23 @@ jobs:
             fi
           done
 
-      - name: Encrypt Results with Symmetric Key
+      - name: Send Notification to Discord
         env:
-          SYMMETRIC_KEY: ${{ secrets.SYMMETRIC_KEY }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          echo "Encrypting results with symmetric key..."
-          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
-            -in healthcheck_results.txt \
-            -out healthcheck_results.txt.enc \
-            -pass pass:"$SYMMETRIC_KEY"
+          failed_checks=$(grep "FAIL" healthcheck_results.txt)
 
-      - name: Upload Encrypted Results
-        uses: actions/upload-artifact@v3
-        with:
-          name: healthcheck-results-encrypted
-          path: healthcheck_results.txt.enc
+          if [ -n "$failed_checks" ]; then
+            message="**⚠️ Healthcheck failed for the following domains:**\n\n"
+
+            message+=$(echo "$failed_checks" | while IFS= read -r line; do
+              domain=$(echo "$line" | cut -d' ' -f1)  # 도메인 추출
+              status=$(echo "$line" | cut -d' ' -f3)  # 상태 추출
+              echo "❌ **$domain** is down! (HTTP $status)"
+            done)
+
+            curl -H "Content-Type: application/json" \
+                 -d "{\"embeds\": [{\"title\": \"Healthcheck Failed!\", \"description\": \"$message\", \"color\": 16711680}]}" \
+                 $DISCORD_WEBHOOK
+          else
+            echo "No failed checks. No notification sent."
