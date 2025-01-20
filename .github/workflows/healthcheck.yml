@@ -30,25 +30,12 @@ jobs:
             http_status=$(curl -o /dev/null -s -w "%{http_code}" $domain)
           
             if [[ "$http_status" =~ ^4|5 ]]; then
-              echo "$domain - FAIL (HTTP $http_status)" >> healthcheck_results.txt
-            else
-              echo "$domain - SUCCESS" >> healthcheck_results.txt
-            fi
-          done
-          
-          failed_checks=$(grep "FAIL" healthcheck_results.txt)
-
-          if [ -n "$failed_checks" ]; then
-            message="**⚠️ Healthcheck failed for the following domains:**\n\n"
-
-            message+=$(echo "$failed_checks" | while IFS= read -r line; do
-              domain=$(echo "$line" | cut -d' ' -f1)  # 도메인 추출
-              status=$(echo "$line" | cut -d' ' -f3)  # 상태 추출
-              echo "❌ **$domain** is down! (HTTP $status)"
-            done)
-
-            curl -H "Content-Type: application/json" \
+              echo "$domain - FAIL (HTTP $http_status)"
+              message="$domain - FAIL (HTTP $http_status)"
+              curl -H "Content-Type: application/json" \
                  -d "{\"embeds\": [{\"title\": \"Healthcheck Failed!\", \"description\": \"$message\", \"color\": 16711680}]}" \
                  $DISCORD_WEBHOOK
-          else
-            echo "No failed checks. No notification sent."
+            else
+              echo "$domain - SUCCESS"
+            fi
+          done
