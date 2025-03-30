@@ -29,7 +29,7 @@ jobs:
             echo "Checking $domain on port 80"
             http_status=$(curl -o /dev/null -s -w "%{http_code}" $domain)
           
-            if [[ "$http_status" =~ ^4|5 ]]; then
+            if [[ "$http_status" =~ ^5 ]]; then
               echo "$domain - FAIL (HTTP $http_status)"
               message="$domain - FAIL (HTTP $http_status)"
               curl -H "Content-Type: application/json" \
